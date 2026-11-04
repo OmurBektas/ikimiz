@@ -1,0 +1,83 @@
+// Assumed data model (all fields required; no additional fields allowed):
+// private/access: {emails: [two verified Google email strings]}; admin only.
+// rooms/ikimiz: {version:1, uid:string, iv:base64(12B), ciphertext:string,
+//   createdAt:timestamp}; immutable AES-GCM key verification envelope.
+// rooms/ikimiz/messages/{id}: {uid:string, iv:string, ciphertext:string,
+//   createdAt:timestamp, editedAt:timestamp}; uid/createdAt immutable.
+// rooms/ikimiz/status/{uid}: {uid:string, typing:bool, typingAt:timestamp,
+//   seenAt:timestamp}; each member can only write their own status.
+// Only rooms/ikimiz is valid. Query: messages createdAt DESC, limit <= 50.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() { return request.auth != null; }
+    function isOwner(uid) { return isAuthenticated() && request.auth.uid == uid; }
+    function isMember() {
+      return isAuthenticated()
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email in get(/databases/$(database)/documents/private/access).data.emails;
+    }
+    function hasOnly(data, fields) {
+      return data.keys().hasAll(fields) && data.keys().hasOnly(fields);
+    }
+    function validEnvelope(data) {
+      return data.iv is string && data.iv.matches('^[A-Za-z0-9+/]{16}$')
+        && data.ciphertext is string && data.ciphertext.size() >= 24
+        && data.ciphertext.size() <= 24000
+        && data.ciphertext.matches('^[A-Za-z0-9+/]+={0,2}$');
+    }
+    function uidUnchanged() { return request.resource.data.uid == request.auth.uid; }
+    function uidNotModified() { return request.resource.data.uid == resource.data.uid; }
+    function validRoom(data) {
+      return hasOnly(data,['version','uid','iv','ciphertext','createdAt'])
+        && data.version == 1 && data.uid is string && data.uid.size() > 0
+        && data.uid.size() <= 128 && validEnvelope(data)
+        && data.createdAt is timestamp;
+    }
+    function validMessage(data) {
+      return hasOnly(data,['uid','iv','ciphertext','createdAt','editedAt'])
+        && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && validEnvelope(data) && data.createdAt is timestamp
+        && data.editedAt is timestamp && data.editedAt >= data.createdAt;
+    }
+    function validStatus(data) {
+      return hasOnly(data,['uid','typing','typingAt','seenAt'])
+        && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && data.typing is bool && data.typingAt is timestamp && data.seenAt is timestamp
+        && data.typingAt == request.time && data.seenAt == request.time;
+    }
+    match /private/{id} { allow read, write: if false; }
+    match /rooms/ikimiz {
+      allow get: if isMember();
+      allow list: if false;
+      allow create: if isMember() && validRoom(request.resource.data)
+        && uidUnchanged() && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+      match /messages/{id} {
+        function roomExists() { return exists(/databases/$(database)/documents/rooms/ikimiz); }
+        allow get: if isMember() && roomExists();
+        allow list: if isMember() && roomExists() && request.query.limit != null && request.query.limit <= 50;
+        allow create: if isMember() && roomExists() && validMessage(request.resource.data)
+          && uidUnchanged() && request.resource.data.createdAt == request.time
+          && request.resource.data.editedAt == request.time;
+        allow update: if isMember() && roomExists() && isOwner(resource.data.uid)
+          && validMessage(request.resource.data) && uidNotModified()
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.editedAt == request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['iv','ciphertext','editedAt']);
+        allow delete: if isMember() && roomExists() && isOwner(resource.data.uid);
+      }
+      match /status/{uid} {
+        function roomExists() { return exists(/databases/$(database)/documents/rooms/ikimiz); }
+        allow read: if isMember() && roomExists();
+        allow create: if isMember() && roomExists() && isOwner(uid)
+          && uidUnchanged() && validStatus(request.resource.data);
+        allow update: if isMember() && roomExists() && isOwner(uid)
+          && uidUnchanged() && uidNotModified() && validStatus(request.resource.data);
+        allow delete: if false;
+      }
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
