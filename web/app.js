@@ -72,6 +72,12 @@ function lock() {
   if (!gate.open) gate.showModal();
 }
 async function logout() { lock(); try { await signOut(auth); } catch (error) { $('#gate-error').textContent = errorMessage(error); } }
+function quickExit() {
+  $('#privacy').close();
+  try { lock(); }
+  finally { window.location.replace('https://www.youtube.com/'); }
+}
+for (const button of document.querySelectorAll('.quick-exit')) button.addEventListener('click',quickExit);
 $('#logout').addEventListener('click',logout);
 $('#gate-logout').addEventListener('click',logout);
 $('#lock').addEventListener('click',lock);
@@ -157,7 +163,8 @@ function subscribe() {
       }
     }
     if (!oldest || !data.has(oldest.id)) oldest = snapshot.docs.at(-1) || null;
-    if (unread) document.title = `(${unread}) İkimiz`;
+    // Keep the tab neutral even when new messages arrive.
+    document.title = baseTitle;
     render(); markSeen();
   },error => { if (activeEpoch === epoch) { lock(); $('#gate-error').textContent = errorMessage(error); } });
   unsubStatus = onSnapshot(statusCollection,snapshot => {
@@ -277,6 +284,8 @@ $('#info').addEventListener('click',() => $('#privacy').showModal());
 $('#close-privacy').addEventListener('click',() => $('#privacy').close());
 window.addEventListener('online',updateConnection);
 window.addEventListener('offline',updateConnection);
+window.addEventListener('pagehide',clearSession);
+window.addEventListener('pageshow',event => { if (event.persisted) lock(); });
 document.addEventListener('visibilitychange',() => {
   clearTimeout(hiddenTimer);
   if (document.hidden) hiddenTimer = setTimeout(lock,120000);

@@ -15,3 +15,5 @@ GitHub hesabı ve Google hesabı için iki adımlı doğrulama kullanın. Yönet
 Spark planı kullanım kotaları içerir. Yalnızca iki kullanıcı olsa da kota aşılabilir ve servis geçici olarak kullanılamayabilir. Bu proje ücretli Cloud Functions, dosya depolama ve SMS kullanmaz. Faturalandırma hesabı bağlamayın. Uygulamada dosya/ses/video gönderme veya uygulama kapalıyken anlık bildirim yoktur.
 
 Kurallar prototip olarak hazırlanmış, Firebase derleyicisinden ve yerel saldırı senaryosu testlerinden geçirilmiştir. Bu kontroller tüm güvenlik açıklarının bulunmuş olduğu anlamına gelmez.
+
+Sekme ve ana ekran adı "Başlangıç" olarak nötr tutulur; okunmamış mesajlar sekme adını değiştirmez. Hızlı çıkış, bellekteki sohbet anahtarını, çözülen mesajları ve taslak metni temizleyip sohbeti kilitler; ardından `location.replace` ile YouTube ana sayfasını açar. Sayfadan ayrılmada anahtar temizlenir ve tarayıcı önbelleğinden geri yüklemede kilit yeniden uygulanır. Google oturumu bu işlemde kapatılmaz. Bu özellik önceki tarayıcı geçmişini silmez, alan adını değiştirmez ve ağ/cihaz izlemeyi engellemez.
