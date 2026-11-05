@@ -294,7 +294,11 @@ $('#composer').addEventListener('submit',async event => {
   finally { sending = false; allowCompose(); if (key && !document.hidden) input.focus(); }
 });
 input.addEventListener('input',() => { input.style.height = 'auto'; input.style.height = `${Math.min(input.scrollHeight,120)}px`; markTyping(); });
-input.addEventListener('keydown',event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); $('#composer').requestSubmit(); } });
+input.addEventListener('keydown',event => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+  event.preventDefault();
+  if (!event.repeat) $('#composer').requestSubmit();
+});
 $('#emoji').addEventListener('click',() => { if (!input.disabled && input.value.length <= 3998) { input.value += '🤍'; input.dispatchEvent(new Event('input')); input.focus(); } });
 $('#cancel-reply').addEventListener('click',() => { if (editing) input.value = ''; cancelReply(); });
 $('#search-toggle').addEventListener('click',() => { $('#search-bar').hidden = !$('#search-bar').hidden; if (!$('#search-bar').hidden) $('#search').focus(); else { $('#search').value = ''; render(); } });
