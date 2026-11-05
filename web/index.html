@@ -13,24 +13,16 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <aside class="sidebar">
-    <a class="brand" href="./" aria-label="İkimiz ana sayfa"><span class="brand-icon">♡</span> ikimiz<span class="dot">.</span></a>
-    <div class="side-caption">BİZE AİT BİR YER</div>
-    <button class="conversation active"><span class="avatar">♡</span><span><strong>Bizim sohbetimiz</strong><small>Küçük şeyler, güzel anlar.</small></span><span class="tiny-heart">♥</span></button>
-    <div class="side-note"><span>✧</span><h2>Mesafeler araya girse de.</h2><p>Günün en küçük ayrıntısını bile paylaşabileceğiniz bir köşe.</p></div>
-    <button id="theme" class="subtle">◐ <span>Görünümü değiştir</span></button>
-    <div class="side-footer">Sadece sen ve ben. <span>♡</span></div>
-  </aside>
   <main class="chat">
-    <header class="chat-header"><span class="avatar">♡</span><div><h1>Bizim sohbetimiz</h1><p id="connection">Sohbet kilitli</p></div><div class="header-actions"><button id="search-toggle" class="icon-button" aria-label="Mesajlarda ara">⌕</button><button id="lock" class="icon-button" aria-label="Sohbeti kilitle">♧</button><details><summary aria-label="Sohbet menüsü">•••</summary><div class="menu"><button id="mobile-theme">Görünümü değiştir</button><button id="info">Gizlilik bilgisi</button><button id="logout">Hesaptan çık</button></div></details></div></header>
+    <header class="chat-header"><span class="avatar">♡</span><div><h1 id="chat-title">İkimiz</h1><p id="connection">Sohbet kilitli</p></div><div class="header-actions"><button id="search-toggle" class="icon-button" aria-label="Mesajlarda ara">⌕</button><button id="lock" class="icon-button" aria-label="Sohbeti kilitle">♧</button><details><summary aria-label="Sohbet menüsü">•••</summary><div class="menu"><button id="mobile-theme">Görünümü değiştir</button><button id="info">Gizlilik bilgisi</button><button id="logout">Hesaptan çık</button></div></details></div></header>
     <div id="offline" class="preview-banner" hidden>Bağlantı kesildi. İnternet gelince sohbet güncellenecek.</div>
     <div id="search-bar" class="search-bar" hidden><label class="sr-only" for="search">Yüklenmiş mesajlarda ara</label><input id="search" type="search" placeholder="Yüklenmiş mesajlarda ara…" maxlength="100"><span id="search-count"></span></div>
     <section id="messages" class="messages" aria-label="Sohbet mesajları" aria-live="polite">
-      <div class="welcome"><div class="welcome-flower">✳</div><span>İYİ Kİ VARSIN</span><h2>Her şey, bir “merhaba” ile.</h2><p>Günün nasıl geçti, aklından neler geçti?<br>Burası ikinize ait olacak.</p></div>
+      <div class="welcome"><div class="welcome-flower" aria-hidden="true">♡</div><h2>Kimse birbirimize ulaşmamızı engelleyemez bitanemm.</h2></div>
     </section>
     <div id="notice" class="notice" role="status"></div>
     <div id="reply-bar" class="reply-bar" hidden><span id="reply-text"></span><button id="cancel-reply" aria-label="Yanıtı veya düzenlemeyi iptal et">×</button></div>
-    <form id="composer" class="composer"><button id="emoji" type="button" class="icon-button" aria-label="Kalp ekle">♡</button><label class="sr-only" for="message">Mesajın</label><textarea id="message" rows="1" maxlength="4000" placeholder="Ona bir şey söyle…" disabled></textarea><button id="send" class="send" type="submit" aria-label="Mesajı gönder" disabled>↑</button></form>
+    <form id="composer" class="composer"><button id="emoji" type="button" class="icon-button" aria-label="Kalp ekle">♡</button><label class="sr-only" for="message">Mesajın</label><textarea id="message" rows="1" maxlength="4000" placeholder="Mesaj gönder…" disabled></textarea><button id="send" class="send" type="submit" aria-label="Mesajı gönder" disabled>↑</button></form>
     <footer class="chat-footer">Mesaj içeriği cihazınızda şifrelenir · Anahtar yalnızca sizde <span>♡</span></footer>
   </main>
   <dialog id="gate" aria-labelledby="gate-title"><div class="gate-content"><div class="gate-logo">♡</div><p class="eyebrow">SADECE İKİMİZ</p><h2 id="gate-title">Bize ait bir yer.</h2><p id="gate-description">Günün en güzel kısmı, seninle konuşmak.</p><div id="login-section"><button id="login" class="primary" disabled>Google ile giriş yap</button><p class="fine">Yalnızca önceden izin verilen iki hesap sohbete erişebilir.</p></div><form id="key-section" hidden><label for="secret">Ortak sohbet anahtarınız</label><input id="secret" type="password" autocomplete="off" spellcheck="false" placeholder="Ortak anahtarı buraya yapıştır" required><p class="fine">Anahtar sunucuya gönderilmez ve bu cihazda kalıcı olarak saklanmaz. Sayfayı yenilersen yeniden gerekir.</p><label id="saved-label" class="checkbox" hidden><input id="saved" type="checkbox">Anahtarı güvenle kaydettim. Kaybolursa eski mesajlar kurtarılamaz.</label><button id="unlock" class="primary" type="submit">Sohbeti aç</button><div class="key-actions"><button id="generate" type="button">İlk kurulum: anahtar oluştur</button><button id="copy-key" type="button">Anahtarı kopyala</button><button id="download-key" type="button">Anahtarı indir</button></div><p class="fine">İlk kişi anahtarı oluşturur ve diğerine güvenilir bir yoldan iletir. Diğer kişi aynı anahtarla açar.</p></form><p id="gate-error" role="status"></p><button id="gate-logout" class="text-button" hidden>Başka hesapla giriş yap</button></div></dialog>

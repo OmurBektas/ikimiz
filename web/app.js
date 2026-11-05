@@ -83,6 +83,7 @@ $('#login').addEventListener('click', async () => {
 });
 onAuthStateChanged(auth, async next => {
   clearSession(); user = next;
+  $('#chat-title').textContent = 'İkimiz';
   $('#login-section').hidden = !!next;
   $('#key-section').hidden = !next;
   $('#gate-logout').hidden = !next;
@@ -93,6 +94,8 @@ onAuthStateChanged(auth, async next => {
     try {
       const room = await getDocFromServer(roomRef);
       if (epoch !== activeEpoch) return;
+      // Presentation only. Server Security Rules still enforce the two-account allowlist.
+      $('#chat-title').textContent = next.uid === 'GAjfo88iwkQT8SyhYpJopinnaqp1' ? 'Citirim' : 'Mottom';
       $('#generate').hidden = room.exists();
     } catch (error) { if (epoch === activeEpoch) { $('#gate-error').textContent = errorMessage(error); $('#key-section').hidden = true; } }
   }
@@ -269,7 +272,7 @@ $('#emoji').addEventListener('click',() => { if (!input.disabled && input.value.
 $('#cancel-reply').addEventListener('click',() => { if (editing) input.value = ''; cancelReply(); });
 $('#search-toggle').addEventListener('click',() => { $('#search-bar').hidden = !$('#search-bar').hidden; if (!$('#search-bar').hidden) $('#search').focus(); else { $('#search').value = ''; render(); } });
 $('#search').addEventListener('input',render);
-for (const selector of ['#theme','#mobile-theme']) $(selector).addEventListener('click',() => document.body.classList.toggle('dark'));
+$('#mobile-theme').addEventListener('click',() => document.body.classList.toggle('dark'));
 $('#info').addEventListener('click',() => $('#privacy').showModal());
 $('#close-privacy').addEventListener('click',() => $('#privacy').close());
 window.addEventListener('online',updateConnection);
