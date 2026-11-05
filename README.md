@@ -12,7 +12,7 @@ Google hesabıyla giriş yapılan, iki kişilik özel mesajlaşma uygulaması. G
 - Sekme arka planda iki dakika kaldığında sohbeti kilitleme.
 - Aynı tarayıcıda yaklaşık 24 saatte bir Google girişi; yazıyor bilgisi mesaj kutusu üzerinde.
 - Özel Google Apps Script projesiyle isteğe bağlı nötr e-posta bildirimleri; kurulum için [notifications/README.md](notifications/README.md).
-- Anahtar cihazda kalıcı olarak saklanmaz. Yenileme sonrası yeniden girilir.
+- Anahtar aynı tarayıcıda, mevcut Google oturumunun bitimine kadar ve en fazla 24 saat hatırlanır. Hızlı çıkış, elle kilitleme veya hesaptan çıkış hatırlamayı iptal eder.
 
 ## Geliştirme
 

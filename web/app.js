@@ -4,6 +4,7 @@ import {getFirestore,doc,collection,getDocFromServer,getDocs,query,orderBy,limit
 import {firebaseConfig} from './firebase-config.js';
 import {generateSecret,importSecret,encrypt,decrypt,messageContext} from './crypto.mjs';
 import {sessionExpiry,dailySessionExpired} from './session.mjs';
+import {KEY_CACHE_MARKER,KEY_REVOCATION_MARKER,rememberKey,loadRememberedKey,forgetRememberedKey,invalidateKeyOperations} from './key-vault.mjs';
 
 const $ = selector => document.querySelector(selector);
 const app = initializeApp(firebaseConfig);
@@ -19,6 +20,7 @@ let replying = null, editing = null, sending = false, generated = false;
 let typingLast = 0, seenLast = 0, lastMarkedMessage = 0, hiddenTimer, renderSequence = 0;
 let unread = 0, loadingOlder = false, exhausted = false;
 let sessionExpiresAt = null, dailyExpiryTimer, expiringSession = false;
+let keyExpiryTimer, restoringKey = false;
 const gate = $('#gate');
 const input = $('#message');
 const list = $('#messages');
@@ -59,6 +61,7 @@ function cancelReply() {
 }
 function clearSession() {
   epoch++; renderSequence++;
+  clearTimeout(keyExpiryTimer);
   unsubMessages?.(); unsubStatus?.();
   unsubMessages = null; unsubStatus = null;
   key = null; data.clear(); decoded.clear(); statuses = []; oldest = null;
@@ -75,15 +78,47 @@ function lock() {
   $('#gate-error').textContent = '';
   if (!gate.open) gate.showModal();
 }
-async function logout() { lock(); try { await signOut(auth); } catch (error) { $('#gate-error').textContent = errorMessage(error); } }
-function quickExit() {
+async function logout() { void forgetRememberedKey(); lock(); try { await signOut(auth); } catch (error) { $('#gate-error').textContent = errorMessage(error); } }
+async function quickExit() {
   $('#privacy').close();
-  try { lock(); }
+  const deletion = forgetRememberedKey(); // Revokes restoration synchronously, before navigation.
+  try { lock(); await Promise.race([deletion,new Promise(resolve => setTimeout(resolve,400))]); }
   finally { window.location.replace('https://www.youtube.com/'); }
+}
+function activateKey(candidate,expiresAt) {
+  unsubMessages?.(); unsubStatus?.();
+  key = candidate; $('#secret').value = ''; gate.close();
+  generated = false; subscribe(); updateConnection();
+  clearTimeout(keyExpiryTimer);
+  keyExpiryTimer = setTimeout(() => {
+    void forgetRememberedKey(); lock();
+    $('#gate-error').textContent = 'Anahtarın 24 saatlik hatırlama süresi doldu. Kodu yeniden gir.';
+  },Math.max(1,expiresAt-Date.now()));
+}
+async function restoreRememberedKey(roomSnapshot = null) {
+  if (key || restoringKey || !user || !navigator.onLine || dailySessionExpired(sessionExpiresAt)) return false;
+  const activeEpoch = epoch, uid = user.uid;
+  restoringKey = true;
+  try {
+    const saved = await loadRememberedKey(uid,sessionExpiresAt);
+    if (!saved || epoch !== activeEpoch) return false;
+    const room = roomSnapshot || await getDocFromServer(roomRef);
+    if (epoch !== activeEpoch || !room.exists()) return false;
+    const proof = await decrypt(saved.key,room.data(),'ikimiz:v1:key-check');
+    if (proof.purpose !== 'ikimiz-key-verification-v1' || epoch !== activeEpoch) return false;
+    if (saved.expiresAt <= Date.now()) { void forgetRememberedKey(); return false; }
+    activateKey(saved.key,saved.expiresAt);
+    notice('');
+    return true;
+  } catch (error) {
+    if (error.name === 'OperationError') void forgetRememberedKey();
+    return false;
+  } finally { restoringKey = false; }
 }
 function enforceDailySignIn() {
   if (!user || sessionExpiresAt === null || !dailySessionExpired(sessionExpiresAt) || expiringSession) return;
   expiringSession = true;
+  void forgetRememberedKey();
   lock();
   signOut(auth).then(() => { $('#gate-error').textContent = '24 saatlik giriş süren doldu. Google hesabınla yeniden giriş yap.'; })
     .catch(() => { $('#gate-error').textContent = 'Giriş süren doldu. Yeniden giriş için bağlantını kontrol et.'; })
@@ -92,7 +127,7 @@ function enforceDailySignIn() {
 for (const button of document.querySelectorAll('.quick-exit')) button.addEventListener('click',quickExit);
 $('#logout').addEventListener('click',logout);
 $('#gate-logout').addEventListener('click',logout);
-$('#lock').addEventListener('click',lock);
+$('#lock').addEventListener('click',() => { void forgetRememberedKey(); lock(); });
 $('#login').addEventListener('click', async () => {
   $('#login').disabled = true; $('#gate-error').textContent = '';
   try { const provider = new GoogleAuthProvider(); provider.setCustomParameters({prompt:'select_account'}); await signInWithPopup(auth,provider); }
@@ -109,6 +144,7 @@ onAuthStateChanged(auth, async next => {
   $('#gate-logout').hidden = !next;
   $('#gate-description').textContent = next ? `${next.email} · Ortak anahtarınızla devam edin.` : 'Günün en güzel kısmı, seninle konuşmak.';
   if (!gate.open) gate.showModal();
+  if (!next) void forgetRememberedKey();
   if (next) {
     const activeEpoch = epoch;
     try {
@@ -123,6 +159,7 @@ onAuthStateChanged(auth, async next => {
       // Presentation only. Server Security Rules still enforce the two-account allowlist.
       $('#chat-title').textContent = next.uid === 'GAjfo88iwkQT8SyhYpJopinnaqp1' ? 'Citirim' : 'Mottom';
       $('#generate').hidden = room.exists();
+      if (room.exists()) await restoreRememberedKey(room);
     } catch (error) { if (epoch === activeEpoch) { $('#gate-error').textContent = errorMessage(error); $('#key-section').hidden = true; } }
   }
 });
@@ -164,8 +201,12 @@ $('#key-section').addEventListener('submit', async event => {
     const proof = await decrypt(candidate,stored,'ikimiz:v1:key-check');
     if (proof.purpose !== 'ikimiz-key-verification-v1') throw new Error('wrong-key');
     if (epoch !== activeEpoch) return;
-    key = candidate; $('#secret').value = ''; gate.close();
-    generated = false; notice(''); subscribe(); updateConnection();
+    $('#secret').value = '';
+    const expiresAt = Math.min(Date.now()+24*60*60*1000,sessionExpiresAt);
+    const remembered = await rememberKey(candidate,owner,expiresAt);
+    if (epoch !== activeEpoch) return;
+    activateKey(candidate,expiresAt);
+    notice(remembered ? '' : 'Bu tarayıcı anahtarı hatırlamaya izin vermedi; yeniden açtığında kodu girmen gerekecek.');
   } catch (error) {
     if (epoch === activeEpoch) $('#gate-error').textContent = error.message === 'first-setup' ? 'İlk kurulum için anahtar oluşturup güvenle kaydetmelisin.' : error.name === 'OperationError' || error.message === 'wrong-key' ? 'Bu anahtar sohbeti açamadı. İkiniz de ilk oluşturulan aynı anahtarı kullanmalısınız.' : error.message.startsWith('Anahtar') ? error.message : errorMessage(error);
   } finally { $('#unlock').disabled = false; }
@@ -309,11 +350,18 @@ $('#close-privacy').addEventListener('click',() => $('#privacy').close());
 window.addEventListener('online',updateConnection);
 window.addEventListener('offline',updateConnection);
 window.addEventListener('pagehide',clearSession);
-window.addEventListener('pageshow',event => { if (event.persisted) lock(); });
+window.addEventListener('pageshow',event => { if (event.persisted) { lock(); enforceDailySignIn(); void restoreRememberedKey(); } });
+window.addEventListener('storage',event => {
+  if (event.key === KEY_REVOCATION_MARKER) { invalidateKeyOperations(); lock(); return; }
+  if (event.key !== KEY_CACHE_MARKER) return;
+  let revoked = !event.newValue;
+  try { revoked = revoked || JSON.parse(event.newValue).revoked === true; } catch { revoked = true; }
+  if (revoked) { invalidateKeyOperations(); lock(); }
+});
 document.addEventListener('visibilitychange',() => {
   clearTimeout(hiddenTimer);
   if (document.hidden) hiddenTimer = setTimeout(lock,120000);
-  else { unread = 0; document.title = baseTitle; enforceDailySignIn(); markSeen(); }
+  else { unread = 0; document.title = baseTitle; enforceDailySignIn(); if (!key) void restoreRememberedKey(); markSeen(); }
 });
 setInterval(() => { enforceDailySignIn(); updateConnection(); if (key && !document.hidden) markSeen(); },15000);
 setInterval(() => { if (!$('#typing-indicator').hidden) updateConnection(); },1000);

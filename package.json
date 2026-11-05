@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=24.12.0"},
-  "overrides": {"@grpc/grpc-js": "^1.13.6"},
+  "engines": {
+    "node": ">=24.12.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.13.6"
+  },
   "scripts": {
     "dev": "vite web --host 127.0.0.1",
     "build": "vite build web --base=/ikimiz/ --outDir ../dist --emptyOutDir",
@@ -16,6 +20,7 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "6.0.0",
+    "fake-indexeddb": "6.2.7",
     "vite": "8.3.5"
   }
 }
