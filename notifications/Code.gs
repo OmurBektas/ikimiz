@@ -144,6 +144,7 @@ function pollNotifications() {
 }
 
 function installNotifications() {
+  ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
   const mutex = LockService.getScriptLock();
   mutex.waitLock(10000);
   try {
