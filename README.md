@@ -10,6 +10,8 @@ Google hesabıyla giriş yapılan, iki kişilik özel mesajlaşma uygulaması. G
 - Mesaj yanıtlama, kendi mesajını düzenleme/silme, okundu/yazıyor durumu.
 - İki doğrulanmış Google hesabına özel sunucu izin listesi.
 - Sekme arka planda iki dakika kaldığında sohbeti kilitleme.
+- Aynı tarayıcıda yaklaşık 24 saatte bir Google girişi; yazıyor bilgisi mesaj kutusu üzerinde.
+- Özel Google Apps Script projesiyle isteğe bağlı nötr e-posta bildirimleri; kurulum için [notifications/README.md](notifications/README.md).
 - Anahtar cihazda kalıcı olarak saklanmaz. Yenileme sonrası yeniden girilir.
 
 ## Geliştirme

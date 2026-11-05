@@ -1,12 +1,14 @@
 import {initializeApp} from 'firebase/app';
-import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut,setPersistence,browserSessionPersistence} from 'firebase/auth';
+import {getAuth,GoogleAuthProvider,signInWithPopup,onAuthStateChanged,signOut,setPersistence,browserLocalPersistence,browserSessionPersistence,getIdTokenResult} from 'firebase/auth';
 import {getFirestore,doc,collection,getDocFromServer,getDocs,query,orderBy,limit,startAfter,onSnapshot,setDoc,updateDoc,deleteDoc,serverTimestamp,runTransaction} from 'firebase/firestore';
 import {firebaseConfig} from './firebase-config.js';
 import {generateSecret,importSecret,encrypt,decrypt,messageContext} from './crypto.mjs';
+import {sessionExpiry,dailySessionExpired} from './session.mjs';
 
 const $ = selector => document.querySelector(selector);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const persistenceReady = setPersistence(auth,browserLocalPersistence).catch(() => setPersistence(auth,browserSessionPersistence));
 const db = getFirestore(app);
 const roomRef = doc(db,'rooms','ikimiz');
 const messageCollection = collection(roomRef,'messages');
@@ -16,6 +18,7 @@ let data = new Map(), decoded = new Map(), statuses = [], oldest = null;
 let replying = null, editing = null, sending = false, generated = false;
 let typingLast = 0, seenLast = 0, lastMarkedMessage = 0, hiddenTimer, renderSequence = 0;
 let unread = 0, loadingOlder = false, exhausted = false;
+let sessionExpiresAt = null, dailyExpiryTimer, expiringSession = false;
 const gate = $('#gate');
 const input = $('#message');
 const list = $('#messages');
@@ -44,8 +47,9 @@ function allowCompose() {
 function updateConnection() {
   $('#offline').hidden = navigator.onLine;
   const other = statuses.find(status => status.id !== user?.uid);
-  const writing = other?.typing && Date.now() - (other.typingAt?.toMillis() || 0) < 8000;
-  $('#connection').textContent = !key ? 'Sohbet kilitli' : !navigator.onLine ? 'Bağlantı bekleniyor' : writing ? 'Sevgilin yazıyor…' : 'İçerik şifreli · Sadece ikiniz';
+  const writing = !!key && navigator.onLine && other?.typing && Date.now() - (other.typingAt?.toMillis() || 0) < 8000;
+  $('#connection').textContent = !key ? 'Sohbet kilitli' : !navigator.onLine ? 'Bağlantı bekleniyor' : 'İçerik şifreli · Sadece ikiniz';
+  $('#typing-indicator').hidden = !writing;
   allowCompose();
 }
 function cancelReply() {
@@ -77,6 +81,14 @@ function quickExit() {
   try { lock(); }
   finally { window.location.replace('https://www.youtube.com/'); }
 }
+function enforceDailySignIn() {
+  if (!user || sessionExpiresAt === null || !dailySessionExpired(sessionExpiresAt) || expiringSession) return;
+  expiringSession = true;
+  lock();
+  signOut(auth).then(() => { $('#gate-error').textContent = '24 saatlik giriş süren doldu. Google hesabınla yeniden giriş yap.'; })
+    .catch(() => { $('#gate-error').textContent = 'Giriş süren doldu. Yeniden giriş için bağlantını kontrol et.'; })
+    .finally(() => { expiringSession = false; });
+}
 for (const button of document.querySelectorAll('.quick-exit')) button.addEventListener('click',quickExit);
 $('#logout').addEventListener('click',logout);
 $('#gate-logout').addEventListener('click',logout);
@@ -89,6 +101,8 @@ $('#login').addEventListener('click', async () => {
 });
 onAuthStateChanged(auth, async next => {
   clearSession(); user = next;
+  clearTimeout(dailyExpiryTimer);
+  sessionExpiresAt = null;
   $('#chat-title').textContent = 'İkimiz';
   $('#login-section').hidden = !!next;
   $('#key-section').hidden = !next;
@@ -98,6 +112,12 @@ onAuthStateChanged(auth, async next => {
   if (next) {
     const activeEpoch = epoch;
     try {
+      await persistenceReady;
+      const token = await getIdTokenResult(next);
+      if (epoch !== activeEpoch) return;
+      sessionExpiresAt = sessionExpiry(token.authTime);
+      if (dailySessionExpired(sessionExpiresAt)) { enforceDailySignIn(); return; }
+      dailyExpiryTimer = setTimeout(enforceDailySignIn,Math.max(1,sessionExpiresAt-Date.now()));
       const room = await getDocFromServer(roomRef);
       if (epoch !== activeEpoch) return;
       // Presentation only. Server Security Rules still enforce the two-account allowlist.
@@ -106,7 +126,7 @@ onAuthStateChanged(auth, async next => {
     } catch (error) { if (epoch === activeEpoch) { $('#gate-error').textContent = errorMessage(error); $('#key-section').hidden = true; } }
   }
 });
-setPersistence(auth,browserSessionPersistence).then(() => { $('#login').disabled = false; }).catch(() => { $('#gate-error').textContent = 'Tarayıcı oturum saklamaya izin vermiyor. Normal bir tarayıcı sekmesinde yeniden dene.'; });
+persistenceReady.then(() => { $('#login').disabled = false; }).catch(() => { $('#gate-error').textContent = 'Tarayıcı oturum saklamaya izin vermiyor. Normal bir tarayıcı sekmesinde yeniden dene.'; });
 
 $('#generate').addEventListener('click', () => {
   $('#secret').value = generateSecret(); generated = true;
@@ -289,7 +309,8 @@ window.addEventListener('pageshow',event => { if (event.persisted) lock(); });
 document.addEventListener('visibilitychange',() => {
   clearTimeout(hiddenTimer);
   if (document.hidden) hiddenTimer = setTimeout(lock,120000);
-  else { unread = 0; document.title = baseTitle; markSeen(); }
+  else { unread = 0; document.title = baseTitle; enforceDailySignIn(); markSeen(); }
 });
-setInterval(() => { updateConnection(); if (key && !document.hidden) markSeen(); },15000);
+setInterval(() => { enforceDailySignIn(); updateConnection(); if (key && !document.hidden) markSeen(); },15000);
+setInterval(() => { if (!$('#typing-indicator').hidden) updateConnection(); },1000);
 updateConnection();
